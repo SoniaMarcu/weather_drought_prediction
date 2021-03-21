@@ -12,3 +12,5 @@ kaggle > input >
                   
                   soil_data.csv
 
+
+https://www.kaggle.com/cdminix/us-drought-meteorological-data
