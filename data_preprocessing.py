@@ -54,7 +54,6 @@ def eliminate_useless_columns():
     heatmap.set_title('Correlation Heatmap', fontdict={'fontsize': 40}, pad=12);
 
     plt.savefig('heatmap.png', dpi=400, bbox_inches='tight')
-    df_complete.to_pickle("./train_df_complete.pkl")
 
     return df_complete
 
@@ -77,9 +76,20 @@ def get_train_and_test_data():
 
     xTrain=X[0: 13234752, :]
     yTrain=Y[0:13234752]
+    xTrain= pd.DataFrame(xTrain)
+    yTrain= pd.DataFrame(yTrain)
+    xTrain.to_csv('xTrain.csv', index=False)
+    yTrain.to_csv('yTrain.csv', index=False)
     xTest=X[13234752:, :]
     yTest=Y[13234752:]
+    yTest= pd.DataFrame(yTest)
+    xTest= pd.DataFrame(xTest)
 
-    return xTrain, xTest, yTrain, yTest
+    xTest.to_csv("xTest.csv", index=False)
+    yTest.to_csv("yTest.csv", index=False)
 
 
+    # return xTrain, xTest, yTrain, yTest
+
+
+get_train_and_test_data()
