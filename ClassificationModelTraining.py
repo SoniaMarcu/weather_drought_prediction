@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 from tensorflow.python.keras import Sequential
-from tensorflow.python.keras.layers import LSTM, Dropout, Dense
+from tensorflow.python.keras.layers import LSTM, Dropout, Dense,LeakyReLU
 from tensorflow.keras import optimizers
 import pandas as pd
 import random
@@ -12,13 +12,7 @@ os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices'
 tf.config.experimental.set_memory_growth(tf.config.experimental.list_physical_devices('GPU')[0], True)
 
 
-# xTrain, xTest, yTrain, yTest= get_train_and_test_data()
-# xTrain=pd.read_csv("./xTrain.csv")
-# yTrain=pd.read_csv("./yTrain.csv")
-# xTest=pd.read_csv("./xTest.csv")
-# yTest=pd.read_csv("./yTest.csv")
-
-def remove_many_fluffing_zeros():
+def remove_many_fluffing_zeros_train():
     yTrain = pd.read_csv('yTrain.csv', sep=',')
     keep_prob = 0.1
     cont = 0
@@ -40,25 +34,25 @@ def remove_many_fluffing_zeros():
 def summarize_performance(model, xChunk, yChunk, batch_counter):
     loss, acc = model.evaluate(xChunk, yChunk, verbose=0)
     print('>Accuracy: ' + str(acc * 100) + ', Loss: ' + str(loss) + ', Batch Number: ' + str(batch_counter))
+    return loss,acc
 
 
 def create_model(elems_in_batch, output_units):
     model = Sequential()
-    # model.add(LSTM(units=300,batch_input_shape=(elems_in_batch,1,49),return_sequences=True,activation='relu'))
-    # Nu se poate salva modelul daca e stateful. Adica eu nu am reusit
-    model.add(LSTM(units=300, batch_input_shape=(elems_in_batch, 1, 49), return_sequences=True, activation='relu',
-                   stateful=True))
-    # model.add(Dropout(0.2))
-    model.add(LSTM(units=500, return_sequences=True, activation='relu'))
-    model.add(LSTM(units=700, return_sequences=True, activation='relu'))
-    # model.add(Dropout(0.2))
-    model.add(LSTM(units=900, return_sequences=True, activation='relu'))
-    model.add(LSTM(units=700, return_sequences=True, activation='relu'))
-    model.add(LSTM(units=500, return_sequences=True, activation='relu'))
-    model.add(LSTM(units=300, return_sequences=True, activation='relu'))
+    model.add(LSTM(900,batch_input_shape=(elems_in_batch,1,49), return_sequences=True,activation='relu',))
+    model.add(Dropout(0.2))
+    model.add(LSTM(500,activation='relu', return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(units=300, return_sequences=True))
+    model.add(LeakyReLU(0.3))
+    model.add(Dropout(0.2))
+    model.add(LSTM(units=300, return_sequences=True))
+    model.add(LeakyReLU(0.3))
+    model.add(Dropout(0.2))
+    model.add(LSTM(900, activation='relu', return_sequences=True))
     model.add(Dropout(0.2))
     model.add(Dense(output_units, activation='softmax'))
-    optimizer = optimizers.Adam(clipvalue=0.5)
+    optimizer = optimizers.Adam(learning_rate=0.008)
     model.compile(loss='categorical_crossentropy', optimizer=optimizer, metrics=['acc'])
     return model
 
@@ -75,9 +69,12 @@ def train_model():
     scale_up_factor = 4
     elems_in_output = scale_up_factor * 5 + 1
     model = create_model(elems_in_batch, elems_in_output)
-    epochs = 20
+    epochs = 200
     for epoch in range(epochs):
         contor = 0
+        loss=0
+        acc=0
+        cont=0
         for df in pd.read_csv('xTrainCleansed.csv', sep=',', skiprows=contor, chunksize=7 * elems_in_batch):
             if df.shape[0] == 7 * elems_in_batch:
                 xChunk = np.reshape(df.to_numpy(), (elems_in_batch, 1, 49))
@@ -89,11 +86,35 @@ def train_model():
                 yChunk = np.reshape(yChunk, (elems_in_batch, 1, elems_in_output))
                 model.train_on_batch(xChunk, yChunk)
                 model.reset_states()
-                summarize_performance(model, xChunk, yChunk, (contor - 3) // (elems_in_batch * 7))
-        print("End of epoch " + str(epoch))
-
+                loss1,acc1=summarize_performance(model, xChunk, yChunk, (contor - 3) // (elems_in_batch * 7))
+                loss+=loss1
+                acc+=acc1
+                cont+=1
+        print("End of epoch " + str(epoch)+', Acc: '+str(acc/cont)+', Loss: ' +str(loss/cont))
+    loss = 0
+    acc = 0
+    cont = 0
+    contor=1
+    yTest = pd.read_csv('yTest.csv', sep=',')
+    for df in pd.read_csv('xTest.csv', sep=',', skiprows=contor, chunksize=7 * elems_in_batch):
+        if df.shape[0] == 7 * elems_in_batch:
+            xChunk = np.reshape(df.to_numpy(), (elems_in_batch, 1, 49))
+            yChunk = hot_encoding(np.rint(yTest.iloc[contor + 6].to_numpy() * scale_up_factor), elems_in_output)
+            for i in range(1, elems_in_batch):
+                yChunk = np.append(yChunk, hot_encoding(
+                    np.rint(yTest.iloc[contor + 6 + i * 7].to_numpy() * scale_up_factor), elems_in_output), axis=0)
+            contor += 7 * elems_in_batch
+            yChunk = np.reshape(yChunk, (elems_in_batch, 1, elems_in_output))
+            model.train_on_batch(xChunk, yChunk)
+            model.reset_states()
+            loss1, acc1 = summarize_performance(model, xChunk, yChunk, (contor - 3) // (elems_in_batch * 7))
+            loss += loss1
+            acc += acc1
+            cont += 1
+    print('End of testing , Acc: ' + str(acc / cont) + ', Loss: ' + str(loss / cont))
     model.save('model1')
 
 
-# remove_many_fluffing_zeros()
+# remove_many_fluffing_zeros_train()
+# remove_many_fluffing_zeros_test()
 train_model()

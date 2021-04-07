@@ -40,20 +40,37 @@ def remove_many_fluffing_zeros():
 def summarize_performance(model, xChunk, yChunk, batch_counter):
     loss, acc = model.evaluate(xChunk, yChunk, verbose=0)
     print('>Accuracy: ' + str(acc * 100) + ', Loss: ' + str(loss) + ', Batch Number: ' + str(batch_counter))
+    return loss,acc
 
 
 def create_model(elems_in_batch):
     model = Sequential()
-    model.add(LSTM(units=100, batch_input_shape=(elems_in_batch, 1, 49), return_sequences=True, activation='relu'))
-    # Nu se poate salva modelul daca e stateful. Adica eu nu am reusit
-    # model.add(LSTM(units=100,batch_input_shape=(elems_in_batch,1,49),return_sequences=True,activation='relu',stateful=True))
+    #model.add(LSTM(units=100, batch_input_shape=(elems_in_batch, 1, 49), return_sequences=True, activation='relu'))
+    ## Nu se poate salva modelul daca e stateful. Adica eu nu am reusit
+    ## model.add(LSTM(units=100,batch_input_shape=(elems_in_batch,1,49),return_sequences=True,activation='relu',stateful=True))
+    # model.add(Dropout(0.2))
+    # model.add(LSTM(units=200, return_sequences=True))
+    # model.add(Dropout(0.2))
+    # model.add(LSTM(units=100, return_sequences=True))
+    # model.add(Dropout(0.2))
+    # model.add(Dense(1))
+    # optimizer = optimizers.Adam(clipvalue=0.5)
+    model.add(Dense(2000, batch_input_shape=(elems_in_batch, 1, 49), activation='relu'))
+    model.add(Dropout(0.3))
+    model.add(Dense(1700, batch_input_shape=(elems_in_batch, 1, 49), activation='relu'))
     model.add(Dropout(0.2))
-    model.add(LSTM(units=200, return_sequences=True))
+    model.add(Dense(1500, batch_input_shape=(elems_in_batch, 1, 49), activation='relu'))
     model.add(Dropout(0.2))
-    model.add(LSTM(units=100, return_sequences=True))
+    model.add(Dense(1000, batch_input_shape=(elems_in_batch, 1, 49), activation='relu'))
     model.add(Dropout(0.2))
-    model.add(Dense(1))
-    optimizer = optimizers.Adam(clipvalue=0.5)
+    model.add(Dense(1500, batch_input_shape=(elems_in_batch, 1, 49), activation='relu'))
+    model.add(Dropout(0.2))
+    model.add(Dense(1700, batch_input_shape=(elems_in_batch, 1, 49), activation='relu'))
+    model.add(Dropout(0.2))
+    model.add(Dense(2000, batch_input_shape=(elems_in_batch, 1, 49), activation='relu'))
+    model.add(Dropout(0.3))
+    model.add(Dense(1, activation='softmax'))
+    optimizer = optimizers.Adam()
     model.compile(loss='mean_squared_logarithmic_error', optimizer=optimizer, metrics=['acc'])
     return model
 
@@ -63,20 +80,27 @@ def train_model():
     elems_in_batch = 10000
     model = create_model(elems_in_batch)
     epochs = 20
+    scale_up_factor = 1
     for epoch in range(epochs):
         contor = 0
+        loss=0
+        acc=0
+        cont=0
         for df in pd.read_csv('xTrainCleansed.csv', sep=',', skiprows=contor, chunksize=7 * elems_in_batch):
             if df.shape[0] == 7 * elems_in_batch:
                 xChunk = np.reshape(df.to_numpy(), (elems_in_batch, 1, 49))
-                yChunk = yTrain.iloc[contor + 6].to_numpy() * 20
+                yChunk = yTrain.iloc[contor + 6].to_numpy() * scale_up_factor
                 for i in range(1, elems_in_batch):
-                    yChunk = np.append(yChunk, yTrain.iloc[contor + 6 + i * 7].to_numpy() * 20, axis=0)
+                    yChunk = np.append(yChunk, yTrain.iloc[contor + 6 + i * 7].to_numpy() * scale_up_factor, axis=0)
                 contor += 7 * elems_in_batch
                 yChunk = np.reshape(yChunk, (elems_in_batch, 1))
                 model.train_on_batch(xChunk, yChunk)
                 model.reset_states()
-                summarize_performance(model, xChunk, yChunk, (contor - 3) // (elems_in_batch * 7))
-        print("End of epoch " + str(epoch))
+                loss1, acc1 = summarize_performance(model, xChunk, yChunk, (contor - 3) // (elems_in_batch * 7))
+                loss += loss1
+                acc += acc1
+                cont += 1
+        print("End of epoch " + str(epoch) + ', Acc: ' + str(acc / cont) + ', Loss: ' + str(loss / cont))
 
     model.save('model1')
 
